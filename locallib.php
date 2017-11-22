@@ -50,7 +50,7 @@ function get_total_notification($moodleid){
 						INNER JOIN mdl_forum_posts AS fp ON (fp.discussion = discussions.id)
 						INNER JOIN mdl_forum AS forum ON (forum.id = discussions.forum)
 						INNER JOIN mdl_user AS us ON (uen.userid = us.id)
-						INNER JOIN mdl_coursehub AS c ON (c.userid = us.id)
+						INNER JOIN mdl_local_coursehub AS c ON (c.userid = us.id)
 						WHERE fp.modified > c.lastvisit
 						AND us.id = ?
 						GROUP BY fp.id, discussions.course) AS tablewithdata
@@ -68,4 +68,34 @@ function get_total_notification($moodleid){
 	}
 
 	return array($totalpostpercourse);
+}
+
+function facebook_notificationspercourse($user, $courses){
+	global $DB;
+	$courseidarray = array();
+	foreach ($courses as $course){
+		$courseidarray[] = $course->id;
+	}
+	list($sqlin, $paramcourses) = $DB->get_in_or_equal($courseidarray);
+	$coursesnotificationscounter = get_total_notification($user->id);
+	$finalarray = array();
+	$totalnot = 0;
+	foreach ($courseidarray AS $idarray){
+		$totalcount = 0;
+		if (isset($coursesnotificationscounter[0][$idarray])){
+			$totalcount += $coursesnotificationscounter[0][$idarray];
+		}if (isset($coursesnotificationscounter[1][$idarray])){
+			$totalcount += $coursesnotificationscounter[1][$idarray];
+		}if (isset($coursesnotificationscounter[2][$idarray])){
+			$totalcount += $coursesnotificationscounter[2][$idarray];
+		}if (isset($coursesnotificationscounter[3][$idarray])){
+			$totalcount += $coursesnotificationscounter[3][$idarray];
+		}if (isset($coursesnotificationscounter[4][$idarray])){
+			$totalcount += $coursesnotificationscounter[4][$idarray];
+		}
+		$totalnot += $totalcount;
+		$finalarray [$idarray] = $totalcount;
+	}
+	$finalarray [0] = $totalnot;
+	return $finalarray;
 }

@@ -25,6 +25,7 @@
 */
 
 require_once(dirname(dirname(dirname(__FILE__))) . "/config.php");
+require_once ($CFG->dirroot . '/local/coursehub/locallib.php');
 global $CFG, $DB, $OUTPUT, $PAGE, $USER;
 
 // User must be logged in.
@@ -36,6 +37,8 @@ if (isguestuser()) {
 $nombrecortocurso = optional_param('shortname', null, PARAM_TEXT);
 
 $context = context_system::instance();
+
+
 
 
 echo '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">';
@@ -53,15 +56,79 @@ $PAGE->requires->jquery_plugin ( 'ui-css' );
 
 echo $OUTPUT->header();
 
-echo html_writer::tag('h3','Notificaciones');
+echo html_writer::tag('h3','Notificaciones de foro');
 echo html_writer::start_tag('div',array('style' => 'width:100%; height: 210px; overflow:auto;'));
-echo '<ul class="collection with-header">
+
+
+
+
+
+
+
+$usercoursesquery = "SELECT c.id, c.shortname
+	FROM mdl_user u
+	JOIN mdl_user_enrolments ue ON ue.userid = u.id
+	JOIN mdl_enrol e ON e.id = ue.enrolid
+	JOIN mdl_role_assignments ra ON ra.userid = u.id
+	JOIN mdl_context ct ON ct.id = ra.contextid AND ct.contextlevel = 50
+	JOIN mdl_course c ON c.id = ct.instanceid AND e.courseid = c.id
+	JOIN mdl_role r ON r.id = ra.roleid AND r.shortname = 'editingteacher'
+	JOIN mdl_course_categories cc ON c.category = cc.id";
+
+$usercourses = $DB->get_records_sql($usercoursesquery);
+
+echo '<ul class="collection with-header">';
+foreach ($usercourses as $usercur){
+	$forumquery = "SELECT fp.id, u.username, fp.message
+		FROM mdl_forum_discussions fd
+		INNER JOIN mdl_forum_posts fp ON fp.discussion = fd.id
+		INNER JOIN mdl_user u ON u.id = fp.userid
+		WHERE fd.course = ".$usercur->id."
+		ORDER BY modified";
+
+	$forumdiscussions = $DB->get_records_sql($forumquery);
+	foreach ($forumdiscussions as $comment){
+		echo '<li class="collection-item"><div>'.$comment->username." escribio en el foro del curso: ".$usercur->shortname.'<a href="#!" class="secondary-content"><i class="material-icons">send</i></a></div></li>';
+	}
+}
+echo '</ul>';
+
+echo html_writer::end_tag('div');
+
+echo html_writer::tag('h3','Notificaciones de tarea');
+echo html_writer::start_tag('div',array('style' => 'width:100%; height: 210px; overflow:auto;'));
+
+echo '<ul class="collection with-header">';
+foreach ($usercourses as $usercur){
+	$forumquery = "SELECT mas.id, ma.course, ma.name, ma.intro, mas.userid, u.username, mas.timemodified FROM `mdl_assign` ma 
+		INNER JOIN mdl_assign_submission mas
+		INNER JOIN mdl_user u
+		WHERE ma.id = mas.assignment AND u.id = mas.userid AND ma.course = ".$usercur->id."
+		ORDER BY mas.timemodified";
+
+	$forumdiscussions = $DB->get_records_sql($forumquery);
+	foreach ($forumdiscussions as $comment){
+		echo '<li class="collection-item"><div>'.$comment->username." entrego la tarea: ".$comment->name." en el curso: ".$usercur->shortname.'<a href="#!" class="secondary-content"><i class="material-icons">send</i></a></div></li>';
+	}
+}
+echo '</ul>';
+
+
+
+
+/*echo '<ul class="collection with-header">
         <li class="collection-item"><div>Juan Fernando entrego tarea "tarea1" en curso "2220-S-MAT106-2-2-2017".<a href="#!" class="secondary-content"><i class="material-icons">send</i></a></div></li>
         <li class="collection-item"><div>Mark henriquez entrego tarea "tarea1" en curso "2220-S-MAT106-2-2-2017".<a href="#!" class="secondary-content"><i class="material-icons">send</i></a></div></li>
         <li class="collection-item"><div>Joaquin Rivano escribio en el foro del curso "2220-S-MAT118-2-2-2017".<a href="#!" class="secondary-content"><i class="material-icons">send</i></a></div></li>
         <li class="collection-item"><div>Pedro Picapiedra escribio en el foro del curso "2220-S-CORE102-2-2-2017".<a href="#!" class="secondary-content"><i class="material-icons">send</i></a></div></li>
 		<li class="collection-item"><div>Juan Ortiz escribio en el foro del curso "2220-S-LITR108-2-2-2017".<a href="#!" class="secondary-content"><i class="material-icons">send</i></a></div></li>
       </ul>';
+*/
+
+
+
+
+
 echo html_writer::end_tag('div');
 echo html_writer::tag('h3','Acciones globales');
 echo html_writer::start_tag('div',array('style' => 'width:100%; height: 10%;'));
@@ -144,7 +211,7 @@ if($nombrecortocurso != null){
 	$coursetable->data = $data;
 	echo html_writer::table($coursetable);
 }else{
-	$usercoursesql = "SELECT c.id, c.shortname
+	$usercoursesql = "SELECT c.id, c.shortname, c.fullname
 	FROM mdl_user u
 	JOIN mdl_user_enrolments ue ON ue.userid = u.id
 	JOIN mdl_enrol e ON e.id = ue.enrolid
@@ -164,7 +231,8 @@ if($nombrecortocurso != null){
 		}
 		
 	}
-	
+
+	$notice = facebook_notificationspercourse($usercur, $courses);
 	
 	$data = array();
 	$data[0][0] = '';
@@ -183,6 +251,8 @@ if($nombrecortocurso != null){
 		$html = '<a href='.$url.'><button type="button" class="btn btn-info btn-lg" style="white-space: normal; width: 90%; height: 90%; border: 1px solid lightgray; background: #F0F0F0;" courseid="' . $courseid . '" fullname="' . $fullname . '" moodleid="'.$USER->id.'" component="button">';
 		$html .= '<p class="name" align="left" style="position: relative; height: 3em; overflow: hidden; color: black; font-weight: bold; text-decoration: none; font-size:13px; word-wrap: initial;" courseid="' . $courseid . '" moodleid="'.$USER->id.'" component="button">
 				' . $courses. '</p>';
+		$html .= "<li id='cursosli'><a>Cursos
+ 		 			<span class='new badge light-blue darken-'>".$notice[0]."</span></a></li>";
 		$html .= '</button></a>';
 		$data[$row][$count] = $html;
 		$count++;
@@ -198,8 +268,6 @@ if($nombrecortocurso != null){
 	$coursetable->data = $data;
 	echo html_writer::table($coursetable);
 }
-
-
 
 $record = new StdClass();
 $record->userid = $USER->id;
